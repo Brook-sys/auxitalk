@@ -2,13 +2,14 @@ package supervisor
 
 import (
 	"context"
-	"os/exec"
+	"encoding/json"
 )
 
 type SupervisorInterface interface {
-	Register(id string, cmd *exec.Cmd) error
+	Register(spec ProcessSpec) error
 	Start(ctx context.Context, id string) error
 	Stop(id string) error
+	Call(ctx context.Context, id string, method string, params any) (json.RawMessage, error)
 	IsRunning(id string) bool
 	List() []string
 }

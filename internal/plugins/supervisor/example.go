@@ -1,13 +1,18 @@
 package supervisor
 
-// Exemplo de uso do supervisor:
+// Example:
 //
-// supervisor := supervisor.NewSupervisor()
+// sup := supervisor.NewSupervisor(supervisor.ProcessOptions{
+//     MaxRestarts: 3,
+// })
 //
-// cmd := exec.Command("./plugin-whatsapp")
-// supervisor.Register("whatsapp", cmd)
+// sup.Register(supervisor.ProcessSpec{
+//     ID: "whatsapp",
+//     Command: "/path/to/plugin-whatsapp",
+// })
 //
-// supervisor.Start(context.Background(), "whatsapp")
+// sup.Start(context.Background(), "whatsapp")
 //
-// // depois...
-// supervisor.Stop("whatsapp")
+// sup.Call(context.Background(), "whatsapp", "plugin.health", nil)
+//
+// sup.Stop("whatsapp")
