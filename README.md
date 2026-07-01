@@ -44,6 +44,12 @@ Run the daemon:
 go run ./cmd/auxitalkd
 ```
 
+Run with config:
+
+```sh
+go run ./cmd/auxitalkd --config configs/auxitalk.example.json
+```
+
 Run the CLI placeholder:
 
 ```sh
