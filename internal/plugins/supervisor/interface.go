@@ -11,5 +11,7 @@ type SupervisorInterface interface {
 	Stop(id string) error
 	Call(ctx context.Context, id string, method string, params any) (json.RawMessage, error)
 	IsRunning(id string) bool
+	Status(id string) (ProcessStatus, bool)
 	List() []string
+	ListStatus() []ProcessStatus
 }

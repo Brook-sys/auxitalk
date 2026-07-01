@@ -16,7 +16,7 @@ func TestRuntimeLoadsEnabledPluginManifest(t *testing.T) {
 	script := filepath.Join(dir, "plugin.sh")
 	if err := os.WriteFile(script, []byte(`#!/usr/bin/env sh
 printf started > started.txt
-printf '{"jsonrpc":"2.0","id":"evt-1","method":"event.emit","params":{"type":"plugin.started","payload":{"ok":true}}}\n'
+printf '{"jsonrpc":"2.0","id":"evt-1","method":"event.emit","params":{"type":"fake.started","payload":{"ok":true}}}\n'
 while IFS= read -r line; do
   id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
   method=$(printf '%s' "$line" | sed -n 's/.*"method":"\([^"]*\)".*/\1/p')
@@ -61,7 +61,7 @@ done
 	})
 
 	events := make(chan types.Event, 1)
-	sub, err := r.Events().Subscribe("plugin.started", func(ctx context.Context, event types.Event) error {
+	sub, err := r.Events().Subscribe("fake.started", func(ctx context.Context, event types.Event) error {
 		events <- event
 		return nil
 	})
@@ -90,6 +90,14 @@ done
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("event was not published")
+	}
+
+	statuses := r.PluginStatuses()
+	if len(statuses) != 1 {
+		t.Fatalf("expected one plugin status, got %d", len(statuses))
+	}
+	if statuses[0].ID != "fake-plugin" || !statuses[0].Running {
+		t.Fatalf("unexpected plugin status: %+v", statuses[0])
 	}
 
 	cancel()

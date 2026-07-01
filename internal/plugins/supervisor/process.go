@@ -36,6 +36,17 @@ type ProcessOptions struct {
 	MaxPayloadSize int
 	OnRequest      func(ProcessRequest)
 	OnLog          func(pluginID string, line string)
+	OnStatus       func(ProcessStatus)
+}
+
+type ProcessStatus struct {
+	ID        string        `json:"id"`
+	Running   bool          `json:"running"`
+	StartedAt time.Time     `json:"startedAt,omitempty"`
+	StoppedAt time.Time     `json:"stoppedAt,omitempty"`
+	Uptime    time.Duration `json:"uptime"`
+	Restarts  int           `json:"restarts"`
+	LastError string        `json:"lastError,omitempty"`
 }
 
 type ProcessRequest struct {
@@ -61,6 +72,8 @@ type PluginProcess struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	restarts  int
+	startedAt time.Time
+	stoppedAt time.Time
 	lastError error
 }
 
@@ -120,12 +133,15 @@ func (p *PluginProcess) startLocked(ctx context.Context) error {
 	p.stdout = stdout
 	p.stderr = stderr
 	p.running = true
+	p.startedAt = time.Now().UTC()
+	p.stoppedAt = time.Time{}
 	p.lastError = nil
 
 	go p.readStdout()
 	go p.readStderr()
 	go p.monitor()
 	go p.healthLoop()
+	p.emitStatusLocked()
 
 	return nil
 }
@@ -196,6 +212,35 @@ func (p *PluginProcess) LastError() error {
 	return p.lastError
 }
 
+func (p *PluginProcess) Status() ProcessStatus {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.statusLocked()
+}
+
+func (p *PluginProcess) statusLocked() ProcessStatus {
+	status := ProcessStatus{
+		ID:        p.spec.ID,
+		Running:   p.running,
+		StartedAt: p.startedAt,
+		StoppedAt: p.stoppedAt,
+		Restarts:  p.restarts,
+	}
+	if p.running && !p.startedAt.IsZero() {
+		status.Uptime = time.Since(p.startedAt)
+	}
+	if p.lastError != nil {
+		status.LastError = p.lastError.Error()
+	}
+	return status
+}
+
+func (p *PluginProcess) emitStatusLocked() {
+	if p.opts.OnStatus != nil {
+		p.opts.OnStatus(p.statusLocked())
+	}
+}
+
 func (p *PluginProcess) stopLocked() {
 	if p.cancel != nil {
 		p.cancel()
@@ -204,6 +249,8 @@ func (p *PluginProcess) stopLocked() {
 		_ = p.cmd.Process.Kill()
 	}
 	p.running = false
+	p.stoppedAt = time.Now().UTC()
+	p.emitStatusLocked()
 }
 
 func (p *PluginProcess) readStdout() {
@@ -291,11 +338,13 @@ func (p *PluginProcess) monitor() {
 
 	p.mu.Lock()
 	p.running = false
+	p.stoppedAt = time.Now().UTC()
 	p.lastError = err
 	shouldRestart := p.ctx != nil && p.ctx.Err() == nil && p.restarts < p.opts.MaxRestarts
 	if shouldRestart {
 		p.restarts++
 	}
+	p.emitStatusLocked()
 	p.mu.Unlock()
 
 	if shouldRestart {
@@ -318,6 +367,7 @@ func (p *PluginProcess) healthLoop() {
 			if err != nil {
 				p.mu.Lock()
 				p.lastError = err
+				p.emitStatusLocked()
 				p.mu.Unlock()
 			}
 		}

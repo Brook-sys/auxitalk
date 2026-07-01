@@ -46,6 +46,7 @@ func New(options Options) *Runtime {
 			fmt.Printf("[%s] %s\n", pluginID, line)
 		},
 		OnRequest: r.handlePluginRequest,
+		OnStatus:  r.handlePluginStatus,
 	})
 
 	return r
@@ -64,6 +65,31 @@ func (r *Runtime) Run(ctx context.Context) error {
 
 func (r *Runtime) Events() *events.Bus {
 	return r.events
+}
+
+func (r *Runtime) PluginStatuses() []supervisor.ProcessStatus {
+	return r.supervisor.ListStatus()
+}
+
+func (r *Runtime) handlePluginStatus(status supervisor.ProcessStatus) {
+	eventType := "plugin.stopped"
+	if status.Running {
+		eventType = "plugin.started"
+	} else if status.LastError != "" {
+		eventType = "plugin.error"
+	}
+	_ = r.events.Publish(context.Background(), types.Event{
+		ID:        fmt.Sprintf("%s-status-%d", status.ID, time.Now().UnixNano()),
+		Type:      eventType,
+		Source:    "core.runtime",
+		CreatedAt: time.Now().UTC(),
+		Payload: map[string]any{
+			"id":        status.ID,
+			"running":   status.Running,
+			"restarts":  status.Restarts,
+			"lastError": status.LastError,
+		},
+	})
 }
 
 func (r *Runtime) handlePluginRequest(req supervisor.ProcessRequest) {

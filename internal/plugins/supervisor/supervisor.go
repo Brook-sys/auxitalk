@@ -79,6 +79,29 @@ func (s *Supervisor) List() []string {
 	return ids
 }
 
+func (s *Supervisor) Status(id string) (ProcessStatus, bool) {
+	p, ok := s.get(id)
+	if !ok {
+		return ProcessStatus{}, false
+	}
+	return p.Status(), true
+}
+
+func (s *Supervisor) ListStatus() []ProcessStatus {
+	s.mu.RLock()
+	plugins := make([]*PluginProcess, 0, len(s.plugins))
+	for _, plugin := range s.plugins {
+		plugins = append(plugins, plugin)
+	}
+	s.mu.RUnlock()
+
+	statuses := make([]ProcessStatus, 0, len(plugins))
+	for _, plugin := range plugins {
+		statuses = append(statuses, plugin.Status())
+	}
+	return statuses
+}
+
 func (s *Supervisor) get(id string) (*PluginProcess, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
