@@ -42,11 +42,12 @@ func New(options Options) *Runtime {
 	}
 
 	r.supervisor = supervisor.NewSupervisor(supervisor.ProcessOptions{
-		CallTimeout:    options.Config.Runtime.RequestTimeout.Std(),
-		HealthInterval: 30 * time.Second,
-		RestartBackoff: time.Second,
-		MaxRestarts:    3,
-		MaxPayloadSize: int(options.Config.Runtime.MaxPayloadSize),
+		CallTimeout:       options.Config.Runtime.RequestTimeout.Std(),
+		HealthInterval:    30 * time.Second,
+		RestartBackoff:    time.Second,
+		MaxRestarts:       3,
+		MaxHealthFailures: 3,
+		MaxPayloadSize:    int(options.Config.Runtime.MaxPayloadSize),
 		OnLog: func(pluginID string, line string) {
 			fmt.Printf("[%s] %s\n", pluginID, line)
 		},
