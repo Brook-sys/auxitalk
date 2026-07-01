@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Brook-sys/auxitalk/internal/config"
 	"github.com/Brook-sys/auxitalk/internal/runtime"
@@ -20,13 +22,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	r := runtime.New(runtime.Options{
 		Name:    "auxitalkd",
 		Version: "0.1.0-dev",
 		Config:  cfg,
 	})
 
-	if err := r.Run(context.Background()); err != nil {
+	if err := r.Run(ctx); err != nil && err != context.Canceled {
 		fmt.Fprintf(os.Stderr, "auxitalkd: %v\n", err)
 		os.Exit(1)
 	}

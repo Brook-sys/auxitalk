@@ -90,7 +90,8 @@ func (p *PluginProcess) Start(ctx context.Context) error {
 }
 
 func (p *PluginProcess) startLocked(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, p.spec.Command, p.spec.Args...)
+	processCtx, cancel := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(processCtx, p.spec.Command, p.spec.Args...)
 	cmd.Dir = p.spec.Dir
 	cmd.Env = append(cmd.Env, p.spec.Env...)
 
@@ -111,7 +112,7 @@ func (p *PluginProcess) startLocked(ctx context.Context) error {
 		return err
 	}
 
-	p.ctx, p.cancel = context.WithCancel(ctx)
+	p.ctx, p.cancel = processCtx, cancel
 	p.cmd = cmd
 	p.stdin = stdin
 	p.stdout = stdout
