@@ -84,6 +84,41 @@ func (r *Runtime) PendingActions() []types.ActionRequest {
 	return r.actions.Pending()
 }
 
+func (r *Runtime) ApproveAction(id string) (types.ActionRequest, error) {
+	action, err := r.actions.UpdateStatus(id, types.ActionStatusAllowed)
+	if err != nil {
+		return types.ActionRequest{}, err
+	}
+	r.publishActionStatus("action.approved", action)
+	return action, nil
+}
+
+func (r *Runtime) DenyAction(id string) (types.ActionRequest, error) {
+	action, err := r.actions.UpdateStatus(id, types.ActionStatusDenied)
+	if err != nil {
+		return types.ActionRequest{}, err
+	}
+	r.publishActionStatus("action.denied", action)
+	return action, nil
+}
+
+func (r *Runtime) publishActionStatus(eventType string, action types.ActionRequest) {
+	_ = r.events.Publish(context.Background(), types.Event{
+		ID:        fmt.Sprintf("%s-%d", eventType, time.Now().UnixNano()),
+		Type:      eventType,
+		Source:    "core.runtime",
+		SessionID: action.SessionID,
+		CreatedAt: time.Now().UTC(),
+		Payload: map[string]any{
+			"id":     action.ID,
+			"type":   action.Type,
+			"risk":   action.Risk,
+			"status": action.Status,
+			"source": action.Source,
+		},
+	})
+}
+
 func (r *Runtime) handlePluginStatus(status supervisor.ProcessStatus) {
 	eventType := "plugin.stopped"
 	if status.Running {

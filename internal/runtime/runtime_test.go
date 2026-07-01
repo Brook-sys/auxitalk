@@ -129,6 +129,13 @@ done
 	if actions[0].Source != "fake-plugin" || actions[0].Status != types.ActionStatusAllowed {
 		t.Fatalf("unexpected action: %+v", actions[0])
 	}
+	denied, err := r.DenyAction(actions[0].ID)
+	if err != nil {
+		t.Fatalf("deny action: %v", err)
+	}
+	if denied.Status != types.ActionStatusDenied {
+		t.Fatalf("expected denied action, got %+v", denied)
+	}
 
 	cancel()
 	select {
