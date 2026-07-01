@@ -30,6 +30,17 @@ Initial scope:
 - action requests keep the original session id and event metadata;
 - actions still flow through the existing action gate/store when integrated by runtime code.
 
+## Mock executor
+
+The first executor is intentionally safe and dry-run only. It records simulated executions for these workflow action types:
+
+- `send_message`
+- `run_command`
+- `call_plugin`
+- `emit_event`
+
+The mock executor never sends messages, runs shell commands, calls plugins, or emits real events. It returns an `ActionExecution` with `dryRun: true` so workflow behavior can be tested before real executors are added behind policy gates.
+
 Planned next steps:
 
 - load workflow rules from config;

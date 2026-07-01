@@ -14,11 +14,12 @@ type ActionSink interface {
 }
 
 type Engine struct {
-	mu    sync.RWMutex
-	rules []types.WorkflowRule
-	sink  ActionSink
-	now   func() time.Time
-	idSeq uint64
+	mu       sync.RWMutex
+	rules    []types.WorkflowRule
+	sink     ActionSink
+	executor Executor
+	now      func() time.Time
+	idSeq    uint64
 }
 
 func NewEngine(sink ActionSink, rules []types.WorkflowRule) (*Engine, error) {
@@ -53,6 +54,22 @@ func (e *Engine) Rules() []types.WorkflowRule {
 	rules := make([]types.WorkflowRule, len(e.rules))
 	copy(rules, e.rules)
 	return rules
+}
+
+func (e *Engine) SetExecutor(executor Executor) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.executor = executor
+}
+
+func (e *Engine) ExecuteAction(ctx context.Context, action types.ActionRequest) (types.ActionExecution, error) {
+	e.mu.RLock()
+	executor := e.executor
+	e.mu.RUnlock()
+	if executor == nil {
+		return types.ActionExecution{}, fmt.Errorf("workflow executor is not configured")
+	}
+	return executor.Execute(ctx, action)
 }
 
 func (e *Engine) HandleEvent(ctx context.Context, event types.Event) ([]types.ActionRequest, error) {
