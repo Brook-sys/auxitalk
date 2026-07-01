@@ -8,6 +8,10 @@ Protocol: JSON-RPC 2.0 over stdio.
 
 Each message must be a single JSON object encoded as one line.
 
+The public JSON-RPC message types live in `pkg/protocol`.
+
+The stdio codec implementation lives in `internal/rpc`.
+
 ## Message limits
 
 Initial defaults:
@@ -18,6 +22,17 @@ request_timeout = 10s
 health_timeout = 2s
 max_events_per_second = 50
 ```
+
+## Transport rules
+
+- Every message is line-delimited JSON.
+- `jsonrpc` must be `2.0`.
+- Requests must include `method`.
+- Responses must include `id`.
+- `stdout` is reserved for protocol messages.
+- `stderr` is reserved for logs.
+- Payloads above the configured limit are rejected.
+- Reads and writes respect context timeout/cancellation.
 
 ## Handshake
 
