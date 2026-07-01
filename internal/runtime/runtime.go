@@ -151,6 +151,8 @@ func (r *Runtime) handlePluginRequest(req supervisor.ProcessRequest) {
 		err = r.handleEventEmit(req)
 	case "action.request":
 		err = r.handleActionRequest(req)
+	case "plugin.stop":
+		err = r.handlePluginStop(req)
 	default:
 		err = req.Reject(protocol.ErrMethodNotFound, "method not found")
 	}
@@ -197,6 +199,21 @@ func (r *Runtime) handleActionRequest(req supervisor.ProcessRequest) error {
 		},
 	})
 	return req.Respond(action)
+}
+
+func (r *Runtime) handlePluginStop(req supervisor.ProcessRequest) error {
+	id := req.PluginID
+	_ = r.events.Publish(context.Background(), types.Event{
+		ID:        fmt.Sprintf("%s-stop-%d", id, time.Now().UnixNano()),
+		Type:      "plugin.stop.requested",
+		Source:    "core.runtime",
+		CreatedAt: time.Now().UTC(),
+		Payload:   map[string]any{"id": id},
+	})
+	if err := r.supervisor.Stop(id); err != nil {
+		return req.Reject(protocol.ErrInternal, err.Error())
+	}
+	return req.Respond(map[string]any{"ok": true})
 }
 
 func (r *Runtime) handleEventEmit(req supervisor.ProcessRequest) error {
