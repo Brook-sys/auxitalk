@@ -1,26 +1,28 @@
 # AuxiTalk Core
 
-AuxiTalk Core is a modular runtime for conversation assistance.
+AuxiTalk Core is an event-driven automation runtime for connecting people, AI agents, tools, and communication channels through safe, observable workflows.
 
-It observes conversation events, keeps normalized session state, builds compact context, routes plugin capabilities, and coordinates user-approved actions through a language-agnostic plugin system.
+It observes events, keeps normalized state, builds compact context, routes plugin capabilities, coordinates workflows, and controls user-approved actions through a language-agnostic plugin system.
 
 > Portuguese documentation: [README.pt-BR.md](README.pt-BR.md)
 
 ## What AuxiTalk is
 
-AuxiTalk is the orchestration layer for a future conversation-assistant ecosystem.
+AuxiTalk is the orchestration layer for an automation ecosystem that can connect chats, terminals, dashboards, APIs, plugins, and AI agents.
 
 It is designed to support workflows such as:
 
-- observing a conversation in a channel such as WhatsApp Web, Telegram, Discord, browser, email, or another source;
-- understanding the current context and tone;
-- suggesting replies;
-- recommending whether to answer, wait, ignore, or ask for more context;
-- showing suggestions through a UI, overlay, CLI, or another output plugin;
+- observing messages from channels such as WhatsApp, Telegram, Discord, browser, email, or another source;
+- reacting to terminal output, command failures, logs, webhooks, file changes, or scheduled events;
+- coordinating AI agents and tool plugins;
+- suggesting, approving, or executing actions;
+- showing state and pending approvals through a dashboard, CLI, chat, or another interface;
 - executing sensitive actions only through explicit user-controlled gates;
 - learning from feedback and future memory plugins.
 
 AuxiTalk Core is not tied to a specific app, AI provider, database, or UI.
+
+For the broader product direction, see [Product Vision](docs/product/vision.md).
 
 ## Design goals
 
