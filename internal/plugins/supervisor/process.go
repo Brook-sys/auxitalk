@@ -167,6 +167,10 @@ func (p *PluginProcess) Stop() error {
 }
 
 func (p *PluginProcess) Call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	return p.callWithRetry(ctx, method, params, 1)
+}
+
+func (p *PluginProcess) callWithRetry(ctx context.Context, method string, params any, attempt int) (json.RawMessage, error) {
 	p.mu.Lock()
 	if !p.running {
 		p.mu.Unlock()
@@ -199,6 +203,10 @@ func (p *PluginProcess) Call(ctx context.Context, method string, params any) (js
 	select {
 	case <-callCtx.Done():
 		p.deletePending(id)
+		if attempt < 3 && ctx.Err() == nil {
+			time.Sleep(p.opts.RestartBackoff)
+			return p.callWithRetry(ctx, method, params, attempt+1)
+		}
 		return nil, callCtx.Err()
 	case resp := <-responseCh:
 		if resp.Error != nil {

@@ -60,6 +60,11 @@ func (s *Supervisor) Call(ctx context.Context, id string, method string, params 
 	return p.Call(ctx, method, params)
 }
 
+func (s *Supervisor) HealthCheck(ctx context.Context, id string) error {
+	_, err := s.Call(ctx, id, "plugin.health", nil)
+	return err
+}
+
 func (s *Supervisor) IsRunning(id string) bool {
 	p, ok := s.get(id)
 	if !ok {

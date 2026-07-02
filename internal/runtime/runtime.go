@@ -77,6 +77,10 @@ func (r *Runtime) PluginStatuses() []supervisor.ProcessStatus {
 	return r.supervisor.ListStatus()
 }
 
+func (r *Runtime) HealthCheck(ctx context.Context, id string) error {
+	return r.supervisor.HealthCheck(ctx, id)
+}
+
 func (r *Runtime) Actions() []types.ActionRequest {
 	return r.actions.List()
 }
