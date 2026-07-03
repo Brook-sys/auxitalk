@@ -54,6 +54,10 @@ type Runtime struct {
 	MaxEventsPerSecond int      `json:"maxEventsPerSecond"`
 }
 
+type Storage struct {
+	SQLitePath string `json:"sqlitePath,omitempty"`
+}
+
 type Plugin struct {
 	Manifest string                `json:"manifest,omitempty"`
 	Enabled  bool                  `json:"enabled"`
@@ -65,6 +69,7 @@ type Plugin struct {
 type Config struct {
 	Mode      Mode             `json:"mode"`
 	Runtime   Runtime          `json:"runtime"`
+	Storage   Storage          `json:"storage,omitempty"`
 	Plugins   []Plugin         `json:"plugins"`
 	Workflows []types.Workflow `json:"workflows,omitempty"`
 }

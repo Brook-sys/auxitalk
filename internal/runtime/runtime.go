@@ -14,6 +14,7 @@ import (
 	"github.com/Brook-sys/auxitalk/internal/events"
 	"github.com/Brook-sys/auxitalk/internal/plugins"
 	"github.com/Brook-sys/auxitalk/internal/plugins/supervisor"
+	storagesqlite "github.com/Brook-sys/auxitalk/internal/storage/sqlite"
 	"github.com/Brook-sys/auxitalk/internal/workflows"
 	"github.com/Brook-sys/auxitalk/pkg/protocol"
 	"github.com/Brook-sys/auxitalk/pkg/types"
@@ -34,6 +35,7 @@ type Runtime struct {
 	workflowEngine   *workflows.Engine
 	supervisor       *supervisor.Supervisor
 	router           *capabilities.Router
+	storage          *storagesqlite.Store
 }
 
 func New(options Options) *Runtime {
@@ -74,6 +76,12 @@ func New(options Options) *Runtime {
 func (r *Runtime) Run(ctx context.Context) error {
 	fmt.Printf("%s %s mode=%s\n", r.options.Name, r.options.Version, r.options.Config.Mode)
 
+	if err := r.openStorage(ctx); err != nil {
+		return err
+	}
+	if _, err := r.events.Subscribe("*", r.handlePersistenceEvent); err != nil {
+		return err
+	}
 	if _, err := r.events.Subscribe("*", r.handleWorkflowEvent); err != nil {
 		return err
 	}
@@ -90,6 +98,36 @@ func (r *Runtime) Run(ctx context.Context) error {
 
 func (r *Runtime) Events() *events.Bus {
 	return r.events
+}
+
+func (r *Runtime) openStorage(ctx context.Context) error {
+	if r.options.Config.Storage.SQLitePath == "" {
+		return nil
+	}
+	store, err := storagesqlite.Open(r.options.Config.Storage.SQLitePath)
+	if err != nil {
+		return err
+	}
+	r.storage = store
+	for _, workflow := range r.options.Config.Workflows {
+		if err := r.storage.SaveWorkflow(ctx, workflow); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Runtime) handlePersistenceEvent(ctx context.Context, event types.Event) error {
+	if r.storage == nil {
+		return nil
+	}
+	return r.storage.SaveEvent(ctx, event)
+}
+
+func (r *Runtime) persistAction(action types.ActionRequest) {
+	if r.storage != nil {
+		_ = r.storage.SaveAction(context.Background(), action)
+	}
 }
 
 func (r *Runtime) Workflows() []types.Workflow {
@@ -115,6 +153,7 @@ func (r *Runtime) RequestAction(ctx context.Context, action types.ActionRequest)
 	}
 	action.Status = status
 	r.actions.Save(action)
+	r.persistAction(action)
 	r.publishActionStatus("action.requested", action)
 
 	if action.Status == types.ActionStatusAllowed {
@@ -191,6 +230,7 @@ func (r *Runtime) ApproveAction(id string) (types.ActionRequest, error) {
 	if err != nil {
 		return types.ActionRequest{}, err
 	}
+	r.persistAction(action)
 	r.publishActionStatus("action.approved", action)
 	r.executeActionAsync(action)
 	return action, nil
@@ -201,6 +241,7 @@ func (r *Runtime) DenyAction(id string) (types.ActionRequest, error) {
 	if err != nil {
 		return types.ActionRequest{}, err
 	}
+	r.persistAction(action)
 	r.publishActionStatus("action.denied", action)
 	return action, nil
 }
@@ -265,10 +306,14 @@ func (r *Runtime) executeActionAsync(action types.ActionRequest) {
 		if err != nil {
 			execution.Status = types.ActionExecutionFailed
 			execution.Error = err.Error()
-			_, _ = r.actions.UpdateStatus(action.ID, types.ActionStatusFailed)
+			if updated, updateErr := r.actions.UpdateStatus(action.ID, types.ActionStatusFailed); updateErr == nil {
+				r.persistAction(updated)
+			}
 		} else {
 			execution.Status = types.ActionExecutionCompleted
-			_, _ = r.actions.UpdateStatus(action.ID, types.ActionStatusExecuted)
+			if updated, updateErr := r.actions.UpdateStatus(action.ID, types.ActionStatusExecuted); updateErr == nil {
+				r.persistAction(updated)
+			}
 		}
 
 		_ = r.events.Publish(context.Background(), types.Event{
@@ -471,6 +516,9 @@ func (r *Runtime) shutdown() error {
 		if err := r.supervisor.Stop(id); err != nil {
 			fmt.Printf("plugin stop error %s: %v\n", id, err)
 		}
+	}
+	if r.storage != nil {
+		return r.storage.Close()
 	}
 	return nil
 }
