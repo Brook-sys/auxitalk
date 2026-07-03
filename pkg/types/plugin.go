@@ -55,9 +55,6 @@ func (m PluginManifest) Validate() error {
 	if strings.TrimSpace(m.Runtime) == "" {
 		return errors.New("plugin runtime is required")
 	}
-	if strings.TrimSpace(m.Entry) == "" {
-		return errors.New("plugin entry is required")
-	}
 	switch m.Kind {
 	case PluginKindInput, PluginKindOutput, PluginKindAI, PluginKindMemory, PluginKindUI, PluginKindPolicy, PluginKindTool, PluginKindProfile:
 	default:
