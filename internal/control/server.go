@@ -12,6 +12,7 @@ import (
 
 type Runtime interface {
 	PluginStatuses() []supervisor.ProcessStatus
+	ConfiguredPlugins() []map[string]any
 	RecentEvents() []types.Event
 	Actions() []types.ActionRequest
 	PendingActions() []types.ActionRequest
@@ -56,11 +57,12 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
-		"plugins":        s.runtime.PluginStatuses(),
-		"events":         s.runtime.RecentEvents(),
-		"actions":        s.runtime.Actions(),
-		"pendingActions": s.runtime.PendingActions(),
-		"workflows":      s.runtime.Workflows(),
+		"plugins":           s.runtime.PluginStatuses(),
+		"configuredPlugins": s.runtime.ConfiguredPlugins(),
+		"events":            s.runtime.RecentEvents(),
+		"actions":           s.runtime.Actions(),
+		"pendingActions":    s.runtime.PendingActions(),
+		"workflows":         s.runtime.Workflows(),
 	})
 }
 

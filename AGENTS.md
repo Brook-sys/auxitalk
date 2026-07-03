@@ -112,6 +112,14 @@ It should support:
 4. Avoid side effects unless explicitly approved.
 5. Run `go test ./...`.
 
+### Adding a new plugin
+
+1. Create `AGENTS.md`, `CLAUDE.md`, and `docs/ai-development-guide.md` in the plugin repository.
+2. Add `plugin.json` with capabilities and permissions.
+3. Add the plugin to `configs/auxitalk.dev.json` so it appears in the dashboard and can be tested with the full stack.
+4. Add tests for protocol behavior.
+5. Run the plugin test command and the core `go test ./...` when integration changes are needed.
+
 ### Adding plugin protocol behavior
 
 1. Inspect `pkg/protocol` and `internal/plugins/supervisor`.

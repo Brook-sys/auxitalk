@@ -204,6 +204,31 @@ func (r *Runtime) PluginStatuses() []supervisor.ProcessStatus {
 	return r.supervisor.ListStatus()
 }
 
+func (r *Runtime) ConfiguredPlugins() []map[string]any {
+	items := make([]map[string]any, 0, len(r.options.Config.Plugins))
+	for _, plugin := range r.options.Config.Plugins {
+		item := map[string]any{
+			"manifest": plugin.Manifest,
+			"enabled":  plugin.Enabled,
+		}
+		if plugin.Inline != nil {
+			item["id"] = plugin.Inline.ID
+			item["name"] = plugin.Inline.Name
+			item["kind"] = plugin.Inline.Kind
+			item["capabilities"] = plugin.Inline.Capabilities
+		} else if plugin.Manifest != "" {
+			if manifest, err := plugins.LoadManifest(plugin.Manifest); err == nil {
+				item["id"] = manifest.Manifest.ID
+				item["name"] = manifest.Manifest.Name
+				item["kind"] = manifest.Manifest.Kind
+				item["capabilities"] = manifest.Manifest.Capabilities
+			}
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
 func (r *Runtime) HealthCheck(ctx context.Context, id string) error {
 	return r.supervisor.HealthCheck(ctx, id)
 }

@@ -38,8 +38,12 @@ O arquivo `configs/auxitalk.dev.json` já contém:
 
 - modo `dev`
 - persistência SQLite ativada
-- plugins OpenAI e WhatsApp (WhatsApp desabilitado por padrão)
+- plugins OpenAI, WhatsApp e Dashboard configurados
+- WhatsApp habilitado para teste com QR real
+- Dashboard listado como plugin/interface especial e rodado separadamente
 - workflow de demonstração
+
+Sempre que criar um plugin novo, adicione-o também em `configs/auxitalk.dev.json` para que ele apareça no dashboard e possa ser testado com o ecossistema completo.
 
 ## Comandos úteis
 

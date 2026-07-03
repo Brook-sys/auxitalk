@@ -25,9 +25,17 @@
     },
     {
       "manifest": "../plugin-whatsapp/plugin.json",
+      "enabled": true,
+      "env": {
+        "WHATSAPP_DB_PATH": "./whatsapp-dev.db"
+      }
+    },
+    {
+      "manifest": "../plugin-dashboard/plugin.json",
       "enabled": false,
       "env": {
-        "WHATSAPP_DB": "./whatsapp-dev.db"
+        "DASHBOARD_PORT": "8080",
+        "AUXITALK_CORE_URL": "http://127.0.0.1:8090"
       }
     }
   ],
