@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -99,6 +100,62 @@ func TestEngineInterpolatesEventPayload(t *testing.T) {
 	nested := actions[0].Payload["nested"].(map[string]any)
 	if nested["from"] != "+1000" {
 		t.Fatalf("unexpected nested payload: %+v", nested)
+	}
+}
+
+type memorySessionResolver struct {
+	sessions map[string]types.Session
+}
+
+func (r *memorySessionResolver) Get(id string) (types.Session, error) {
+	if s, ok := r.sessions[id]; ok {
+		return s, nil
+	}
+	return types.Session{}, fmt.Errorf("not found")
+}
+
+func TestEngineInterpolatesSessionData(t *testing.T) {
+	sink := &memorySink{}
+	engine, err := NewEngine(sink, []types.WorkflowRule{{
+		ID:      "session-reply",
+		Enabled: true,
+		Trigger: types.WorkflowTrigger{EventType: "message.received"},
+		Actions: []types.WorkflowAction{{
+			Type: "message.reply",
+			Risk: types.ActionRiskLow,
+			Payload: map[string]any{
+				"text": "Hello {{session.metadata.name}}, your state is {{session.state}}",
+			},
+		}},
+	}})
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+
+	engine.SetSessions(&memorySessionResolver{
+		sessions: map[string]types.Session{
+			"session-1": {
+				ID:    "session-1",
+				State: "verified",
+				Metadata: map[string]any{
+					"name": "Alice",
+				},
+			},
+		},
+	})
+
+	actions, err := engine.HandleEvent(context.Background(), types.Event{
+		ID:        "event-1",
+		Type:      "message.received",
+		Source:    "whatsapp",
+		SessionID: "session-1",
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("handle event: %v", err)
+	}
+	if actions[0].Payload["text"] != "Hello Alice, your state is verified" {
+		t.Fatalf("unexpected text: %+v", actions[0].Payload)
 	}
 }
 

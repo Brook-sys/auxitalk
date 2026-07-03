@@ -14,11 +14,16 @@ type ActionSink interface {
 	RequestAction(context.Context, types.ActionRequest) error
 }
 
+type SessionResolver interface {
+	Get(id string) (types.Session, error)
+}
+
 type Engine struct {
 	mu       sync.RWMutex
 	rules    []types.WorkflowRule
 	sink     ActionSink
 	executor Executor
+	sessions SessionResolver
 	now      func() time.Time
 	idSeq    uint64
 }
@@ -32,6 +37,12 @@ func NewEngine(sink ActionSink, rules []types.WorkflowRule) (*Engine, error) {
 		return nil, err
 	}
 	return engine, nil
+}
+
+func (e *Engine) SetSessions(resolver SessionResolver) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.sessions = resolver
 }
 
 func (e *Engine) SetRules(rules []types.WorkflowRule) error {
@@ -105,6 +116,16 @@ func (e *Engine) HandleEvent(ctx context.Context, event types.Event) ([]types.Ac
 }
 
 func (e *Engine) newActions(rule types.WorkflowRule, event types.Event) []types.ActionRequest {
+	var session types.Session
+	e.mu.RLock()
+	resolver := e.sessions
+	e.mu.RUnlock()
+	if resolver != nil && event.SessionID != "" {
+		if s, err := resolver.Get(event.SessionID); err == nil {
+			session = s
+		}
+	}
+
 	actions := rule.GetActions()
 	requests := make([]types.ActionRequest, 0, len(actions))
 	for _, action := range actions {
@@ -121,7 +142,7 @@ func (e *Engine) newActions(rule types.WorkflowRule, event types.Event) []types.
 			"eventSource":    event.Source,
 		}
 		for key, value := range action.Payload {
-			payload[key] = interpolate(value, event)
+			payload[key] = interpolate(value, event, session)
 		}
 
 		requests = append(requests, types.ActionRequest{
@@ -138,20 +159,20 @@ func (e *Engine) newActions(rule types.WorkflowRule, event types.Event) []types.
 	return requests
 }
 
-func interpolate(value any, event types.Event) any {
+func interpolate(value any, event types.Event, session types.Session) any {
 	switch v := value.(type) {
 	case string:
-		return interpolateString(v, event)
+		return interpolateString(v, event, session)
 	case map[string]any:
 		out := make(map[string]any, len(v))
 		for key, item := range v {
-			out[key] = interpolate(item, event)
+			out[key] = interpolate(item, event, session)
 		}
 		return out
 	case []any:
 		out := make([]any, len(v))
 		for i, item := range v {
-			out[i] = interpolate(item, event)
+			out[i] = interpolate(item, event, session)
 		}
 		return out
 	default:
@@ -159,7 +180,7 @@ func interpolate(value any, event types.Event) any {
 	}
 }
 
-func interpolateString(str string, event types.Event) string {
+func interpolateString(str string, event types.Event, session types.Session) string {
 	str = strings.ReplaceAll(str, "{{event.id}}", event.ID)
 	str = strings.ReplaceAll(str, "{{event.type}}", event.Type)
 	str = strings.ReplaceAll(str, "{{event.source}}", event.Source)
@@ -167,6 +188,11 @@ func interpolateString(str string, event types.Event) string {
 	for key, value := range event.Payload {
 		str = strings.ReplaceAll(str, "{{payload."+key+"}}", fmt.Sprint(value))
 		str = strings.ReplaceAll(str, "{{event.payload."+key+"}}", fmt.Sprint(value))
+	}
+	str = strings.ReplaceAll(str, "{{session.id}}", session.ID)
+	str = strings.ReplaceAll(str, "{{session.state}}", session.State)
+	for key, value := range session.Metadata {
+		str = strings.ReplaceAll(str, "{{session.metadata."+key+"}}", fmt.Sprint(value))
 	}
 	return str
 }

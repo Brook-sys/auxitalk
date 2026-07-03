@@ -57,6 +57,12 @@ func (s *Store) Migrate(ctx context.Context) error {
 			id TEXT PRIMARY KEY,
 			workflow_json TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			id TEXT PRIMARY KEY,
+			channel TEXT NOT NULL,
+			session_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
 	}
 	for _, statement := range statements {
 		if _, err := s.db.ExecContext(ctx, statement); err != nil {
@@ -216,6 +222,56 @@ func (s *Store) ListWorkflows(ctx context.Context) ([]types.Workflow, error) {
 		workflows = append(workflows, workflow)
 	}
 	return workflows, rows.Err()
+}
+
+func (s *Store) SaveSession(ctx context.Context, session types.Session) error {
+	if err := session.Validate(); err != nil {
+		return err
+	}
+	data, err := json.Marshal(session)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT OR REPLACE INTO sessions (id, channel, session_json, updated_at) VALUES (?, ?, ?, ?)`, session.ID, session.Channel, string(data), session.UpdatedAt.Format(time.RFC3339Nano))
+	return err
+}
+
+func (s *Store) GetSession(ctx context.Context, id string) (types.Session, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT session_json FROM sessions WHERE id = ?`, id)
+	var data string
+	if err := row.Scan(&data); err != nil {
+		return types.Session{}, err
+	}
+	var session types.Session
+	if err := json.Unmarshal([]byte(data), &session); err != nil {
+		return types.Session{}, err
+	}
+	return session, nil
+}
+
+func (s *Store) ListSessions(ctx context.Context, limit int) ([]types.Session, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT session_json FROM sessions ORDER BY updated_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	sessions := []types.Session{}
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, err
+		}
+		var session types.Session
+		if err := json.Unmarshal([]byte(data), &session); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, rows.Err()
 }
 
 func Memory() (*Store, error) {

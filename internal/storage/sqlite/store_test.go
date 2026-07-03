@@ -98,4 +98,26 @@ func TestStorePersistsEventsActionsAndWorkflows(t *testing.T) {
 	if len(workflows) != 1 || workflows[0].ID != replacement.ID {
 		t.Fatalf("unexpected replacement workflows: %+v", workflows)
 	}
+
+	session := types.Session{
+		ID:        "session-1",
+		Channel:   "whatsapp",
+		State:     "active",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := store.SaveSession(ctx, session); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+	sessions, err := store.ListSessions(ctx, 10)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != session.ID || sessions[0].State != "active" {
+		t.Fatalf("unexpected sessions: %+v", sessions)
+	}
+	loaded, err := store.GetSession(ctx, "session-1")
+	if err != nil || loaded.ID != session.ID {
+		t.Fatalf("get session: %v (loaded=%+v)", err, loaded)
+	}
 }

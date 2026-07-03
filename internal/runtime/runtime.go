@@ -19,6 +19,7 @@ import (
 	"github.com/Brook-sys/auxitalk/internal/logger"
 	"github.com/Brook-sys/auxitalk/internal/plugins"
 	"github.com/Brook-sys/auxitalk/internal/plugins/supervisor"
+	"github.com/Brook-sys/auxitalk/internal/sessions"
 	storagesqlite "github.com/Brook-sys/auxitalk/internal/storage/sqlite"
 	"github.com/Brook-sys/auxitalk/internal/workflows"
 	"github.com/Brook-sys/auxitalk/pkg/protocol"
@@ -38,6 +39,7 @@ type Runtime struct {
 	gate             *actions.Gate
 	workflowRegistry *workflows.Registry
 	workflowEngine   *workflows.Engine
+	sessions         *sessions.Manager
 	supervisor       *supervisor.Supervisor
 	router           *capabilities.Router
 	storage          *storagesqlite.Store
@@ -50,6 +52,7 @@ func New(options Options) *Runtime {
 		actions:          actions.NewStore(),
 		gate:             actions.NewGate(options.Config.Mode),
 		workflowRegistry: workflows.NewRegistry(),
+		sessions:         sessions.NewManager(),
 		router:           capabilities.NewRouter(),
 		events: events.New(events.Options{
 			HandlerTimeout: options.Config.Runtime.RequestTimeout.Std(),
@@ -61,6 +64,7 @@ func New(options Options) *Runtime {
 	}
 	r.workflowEngine, _ = workflows.NewEngine(r, r.workflowRegistry.EnabledRules())
 	r.workflowEngine.SetExecutor(workflows.NewMockExecutor())
+	r.workflowEngine.SetSessions(r.sessions)
 
 	r.supervisor = supervisor.NewSupervisor(supervisor.ProcessOptions{
 		CallTimeout:       options.Config.Runtime.RequestTimeout.Std(),
@@ -90,6 +94,9 @@ func (r *Runtime) Run(ctx context.Context) error {
 		return err
 	}
 	if _, err := r.events.Subscribe("*", r.handleWorkflowEvent); err != nil {
+		return err
+	}
+	if _, err := r.events.Subscribe("*", r.handleSessionTracking); err != nil {
 		return err
 	}
 	if r.options.Config.Control.Enabled {
@@ -141,6 +148,13 @@ func (r *Runtime) openStorage(ctx context.Context) error {
 	if err == nil {
 		for _, action := range actions {
 			r.actions.Save(action)
+		}
+	}
+
+	sessionsList, err := r.storage.ListSessions(ctx, 1000)
+	if err == nil {
+		for _, session := range sessionsList {
+			_ = r.sessions.Create(session)
 		}
 	}
 
@@ -328,6 +342,32 @@ func (r *Runtime) HealthCheck(ctx context.Context, id string) error {
 	return r.supervisor.HealthCheck(ctx, id)
 }
 
+func (r *Runtime) handleSessionTracking(ctx context.Context, event types.Event) error {
+	if event.SessionID == "" {
+		return nil
+	}
+	session, err := r.sessions.Get(event.SessionID)
+	if err != nil {
+		session = types.Session{
+			ID:        event.SessionID,
+			Channel:   event.Source,
+			State:     "active",
+			Metadata:  map[string]any{},
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+		if createErr := r.sessions.Create(session); createErr != nil {
+			return createErr
+		}
+	} else {
+		session.UpdatedAt = time.Now().UTC()
+		_ = r.sessions.Update(session)
+	}
+	if r.storage != nil {
+		_ = r.storage.SaveSession(ctx, session)
+	}
+	return nil
+}
 func (r *Runtime) handleWorkflowEvent(ctx context.Context, event types.Event) error {
 	if r.workflowEngine == nil {
 		return nil
