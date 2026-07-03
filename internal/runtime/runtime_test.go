@@ -127,8 +127,20 @@ done
 	}
 
 	for i := 0; i < 50; i++ {
-		if len(r.Actions()) == 2 {
-			break
+		actions := r.Actions()
+		if len(actions) == 2 {
+			var pAction, wAction types.ActionRequest
+			for _, a := range actions {
+				if a.Source == "fake-plugin" {
+					pAction = a
+				} else {
+					wAction = a
+				}
+			}
+			if (pAction.Status == types.ActionStatusFailed || pAction.Status == types.ActionStatusExecuted) &&
+				wAction.Status == types.ActionStatusExecuted {
+				break
+			}
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -146,18 +158,11 @@ done
 			workflowAction = action
 		}
 	}
-	if pluginAction.Status != types.ActionStatusAllowed {
-		t.Fatalf("unexpected plugin action: %+v", pluginAction)
+	if pluginAction.Status != types.ActionStatusFailed {
+		t.Fatalf("unexpected plugin action status: %+v", pluginAction)
 	}
-	if workflowAction.Type != types.WorkflowActionEmitEvent || workflowAction.Status != types.ActionStatusAllowed {
+	if workflowAction.Type != types.WorkflowActionEmitEvent || workflowAction.Status != types.ActionStatusExecuted {
 		t.Fatalf("unexpected workflow action: %+v", workflowAction)
-	}
-	denied, err := r.DenyAction(pluginAction.ID)
-	if err != nil {
-		t.Fatalf("deny action: %v", err)
-	}
-	if denied.Status != types.ActionStatusDenied {
-		t.Fatalf("expected denied action, got %+v", denied)
 	}
 
 	cancel()

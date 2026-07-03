@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Brook-sys/auxitalk/internal/actions"
+	"github.com/Brook-sys/auxitalk/internal/capabilities"
 	"github.com/Brook-sys/auxitalk/internal/config"
 	"github.com/Brook-sys/auxitalk/internal/events"
 	"github.com/Brook-sys/auxitalk/internal/plugins"
@@ -31,6 +33,7 @@ type Runtime struct {
 	workflowRegistry *workflows.Registry
 	workflowEngine   *workflows.Engine
 	supervisor       *supervisor.Supervisor
+	router           *capabilities.Router
 }
 
 func New(options Options) *Runtime {
@@ -39,6 +42,7 @@ func New(options Options) *Runtime {
 		actions:          actions.NewStore(),
 		gate:             actions.NewGate(options.Config.Mode),
 		workflowRegistry: workflows.NewRegistry(),
+		router:           capabilities.NewRouter(),
 		events: events.New(events.Options{
 			HandlerTimeout: options.Config.Runtime.RequestTimeout.Std(),
 			HistoryLimit:   1000,
@@ -48,6 +52,7 @@ func New(options Options) *Runtime {
 		_ = r.workflowRegistry.Register(workflow)
 	}
 	r.workflowEngine, _ = workflows.NewEngine(r, r.workflowRegistry.EnabledRules())
+	r.workflowEngine.SetExecutor(workflows.NewMockExecutor())
 
 	r.supervisor = supervisor.NewSupervisor(supervisor.ProcessOptions{
 		CallTimeout:       options.Config.Runtime.RequestTimeout.Std(),
@@ -111,6 +116,11 @@ func (r *Runtime) RequestAction(ctx context.Context, action types.ActionRequest)
 	action.Status = status
 	r.actions.Save(action)
 	r.publishActionStatus("action.requested", action)
+
+	if action.Status == types.ActionStatusAllowed {
+		r.executeActionAsync(action)
+	}
+
 	return nil
 }
 
@@ -182,6 +192,7 @@ func (r *Runtime) ApproveAction(id string) (types.ActionRequest, error) {
 		return types.ActionRequest{}, err
 	}
 	r.publishActionStatus("action.approved", action)
+	r.executeActionAsync(action)
 	return action, nil
 }
 
@@ -209,6 +220,72 @@ func (r *Runtime) publishActionStatus(eventType string, action types.ActionReque
 			"source": action.Source,
 		},
 	})
+}
+
+func (r *Runtime) executeActionAsync(action types.ActionRequest) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), r.options.Config.Runtime.RequestTimeout.Std())
+		defer cancel()
+
+		var execution types.ActionExecution
+		var err error
+
+		if types.IsWorkflowActionType(action.Type) {
+			execution, err = r.workflowEngine.ExecuteAction(ctx, action)
+		} else {
+			// Capability routing fallback
+			parts := strings.SplitN(action.Type, ".", 2)
+			if len(parts) == 2 {
+				pluginID := parts[0]
+				capability := parts[1]
+				result, callErr := r.router.Call(ctx, pluginID, capability, action.Payload)
+				err = callErr
+				execution = types.ActionExecution{
+					ID:          fmt.Sprintf("exec-%s-%d", action.ID, time.Now().UnixNano()),
+					ActionID:    action.ID,
+					Type:        action.Type,
+					Status:      types.ActionExecutionCompleted,
+					Input:       action.Payload,
+					Result:      nil,
+					CreatedAt:   time.Now().UTC(),
+					CompletedAt: time.Now().UTC(),
+				}
+				if result != nil {
+					if resMap, ok := result.(map[string]any); ok {
+						execution.Result = resMap
+					} else {
+						execution.Result = map[string]any{"data": result}
+					}
+				}
+			} else {
+				err = fmt.Errorf("unknown action type: %s", action.Type)
+			}
+		}
+
+		if err != nil {
+			execution.Status = types.ActionExecutionFailed
+			execution.Error = err.Error()
+			_, _ = r.actions.UpdateStatus(action.ID, types.ActionStatusFailed)
+		} else {
+			execution.Status = types.ActionExecutionCompleted
+			_, _ = r.actions.UpdateStatus(action.ID, types.ActionStatusExecuted)
+		}
+
+		_ = r.events.Publish(context.Background(), types.Event{
+			ID:        fmt.Sprintf("action.executed-%d", time.Now().UnixNano()),
+			Type:      "action.executed",
+			Source:    "core.runtime",
+			SessionID: action.SessionID,
+			CreatedAt: time.Now().UTC(),
+			Payload: map[string]any{
+				"actionId": action.ID,
+				"status":   execution.Status,
+				"error":    execution.Error,
+				"result":   execution.Result,
+				"dryRun":   execution.DryRun,
+			},
+		})
+	}()
 }
 
 func (r *Runtime) handlePluginStatus(status supervisor.ProcessStatus) {
@@ -286,6 +363,9 @@ func (r *Runtime) handleActionRequest(req supervisor.ProcessRequest) error {
 			"source": action.Source,
 		},
 	})
+	if action.Status == types.ActionStatusAllowed {
+		r.executeActionAsync(action)
+	}
 	return req.Respond(action)
 }
 
@@ -364,6 +444,20 @@ func (r *Runtime) loadPlugins(ctx context.Context) error {
 		}
 		if err := r.supervisor.Start(ctx, manifestFile.Manifest.ID); err != nil {
 			return err
+		}
+
+		pluginID := manifestFile.Manifest.ID
+		for _, cap := range manifestFile.Manifest.Capabilities {
+			capName := cap.Name
+			err := r.router.RegisterCapability(pluginID, manifestFile.Manifest, capName, func(ctx context.Context, params any) (any, error) {
+				return r.supervisor.Call(ctx, pluginID, "capability.call", map[string]any{
+					"name":  capName,
+					"input": params,
+				})
+			})
+			if err != nil {
+				return err
+			}
 		}
 
 		fmt.Printf("plugin started: %s\n", manifestFile.Manifest.ID)

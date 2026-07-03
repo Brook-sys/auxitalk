@@ -37,22 +37,30 @@ func (r *Router) Register(pluginID string, manifest types.PluginManifest, handle
 	if err := manifest.Validate(); err != nil {
 		return fmt.Errorf("invalid manifest: %w", err)
 	}
+	for _, cap := range manifest.Capabilities {
+		if err := r.RegisterCapability(pluginID, manifest, cap.Name, handler); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Router) RegisterCapability(pluginID string, manifest types.PluginManifest, capability string, handler CapabilityHandler) error {
+	if err := manifest.Validate(); err != nil {
+		return fmt.Errorf("invalid manifest: %w", err)
+	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, cap := range manifest.Capabilities {
-		name := cap.Name
-		if _, exists := r.capabilities[name]; exists {
-			return fmt.Errorf("capability %s already registered", name)
-		}
-		r.capabilities[name] = CapabilityInfo{
-			PluginID: pluginID,
-			Manifest: manifest,
-			Handler:  handler,
-		}
+	if _, exists := r.capabilities[capability]; exists {
+		return fmt.Errorf("capability %s already registered", capability)
 	}
-
+	r.capabilities[capability] = CapabilityInfo{
+		PluginID: pluginID,
+		Manifest: manifest,
+		Handler:  handler,
+	}
 	return nil
 }
 
