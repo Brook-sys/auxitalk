@@ -14,6 +14,7 @@ import (
 	"github.com/Brook-sys/auxitalk/internal/config"
 	"github.com/Brook-sys/auxitalk/internal/control"
 	"github.com/Brook-sys/auxitalk/internal/events"
+	"github.com/Brook-sys/auxitalk/internal/logger"
 	"github.com/Brook-sys/auxitalk/internal/plugins"
 	"github.com/Brook-sys/auxitalk/internal/plugins/supervisor"
 	storagesqlite "github.com/Brook-sys/auxitalk/internal/storage/sqlite"
@@ -67,7 +68,7 @@ func New(options Options) *Runtime {
 		MaxHealthFailures: 3,
 		MaxPayloadSize:    int(options.Config.Runtime.MaxPayloadSize),
 		OnLog: func(pluginID string, line string) {
-			fmt.Printf("[%s] %s\n", pluginID, line)
+			logger.Printf("[%s] %s\n", pluginID, line)
 		},
 		OnRequest: r.handlePluginRequest,
 		OnStatus:  r.handlePluginStatus,
@@ -77,8 +78,8 @@ func New(options Options) *Runtime {
 }
 
 func (r *Runtime) Run(ctx context.Context) error {
-	fmt.Printf("%s %s mode=%s\n", r.options.Name, r.options.Version, r.options.Config.Mode)
-	fmt.Printf("[runtime] storage=%s control=%v\n", r.options.Config.Storage.SQLitePath, r.options.Config.Control.Enabled)
+	logger.Printf("%s %s mode=%s\n", r.options.Name, r.options.Version, r.options.Config.Mode)
+	logger.Printf("[runtime] storage=%s control=%v\n", r.options.Config.Storage.SQLitePath, r.options.Config.Control.Enabled)
 
 	if err := r.openStorage(ctx); err != nil {
 		return err
@@ -93,10 +94,10 @@ func (r *Runtime) Run(ctx context.Context) error {
 		r.controlServer = control.New(r.options.Config.Control.Addr, r)
 		go func() {
 			if err := r.controlServer.Start(); err != nil && err != http.ErrServerClosed {
-				fmt.Printf("control server error: %v\n", err)
+				logger.Printf("control server error: %v\n", err)
 			}
 		}()
-		fmt.Printf("control api listening on %s\n", r.options.Config.Control.Addr)
+		logger.Printf("control api listening on %s\n", r.options.Config.Control.Addr)
 	}
 
 	if err := r.loadPlugins(ctx); err != nil {
@@ -249,7 +250,7 @@ func (r *Runtime) handleWorkflowEvent(ctx context.Context, event types.Event) er
 	if r.workflowEngine == nil {
 		return nil
 	}
-	fmt.Printf("[runtime] workflow event type=%s source=%s\n", event.Type, event.Source)
+	logger.Printf("[runtime] workflow event type=%s source=%s\n", event.Type, event.Source)
 	_, err := r.workflowEngine.HandleEvent(ctx, event)
 	return err
 }
@@ -339,7 +340,7 @@ func (r *Runtime) publishActionStatus(eventType string, action types.ActionReque
 }
 
 func (r *Runtime) executeActionAsync(action types.ActionRequest) {
-	fmt.Printf("[runtime] executing action id=%s type=%s source=%s\n", action.ID, action.Type, action.Source)
+	logger.Printf("[runtime] executing action id=%s type=%s source=%s\n", action.ID, action.Type, action.Source)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), r.options.Config.Runtime.RequestTimeout.Std())
 		defer cancel()
@@ -443,7 +444,7 @@ func (r *Runtime) handlePluginRequest(req supervisor.ProcessRequest) {
 		err = req.Reject(protocol.ErrMethodNotFound, "method not found")
 	}
 	if err != nil {
-		fmt.Printf("[%s] request error %s: %v\n", req.PluginID, req.Method, err)
+		logger.Printf("[%s] request error %s: %v\n", req.PluginID, req.Method, err)
 	}
 }
 
@@ -581,7 +582,7 @@ func (r *Runtime) loadPlugins(ctx context.Context) error {
 			}
 		}
 
-		fmt.Printf("[runtime] plugin started: %s kind=%s caps=%d\n", manifestFile.Manifest.ID, manifestFile.Manifest.Kind, len(manifestFile.Manifest.Capabilities))
+		logger.Printf("[runtime] plugin started: %s kind=%s caps=%d\n", manifestFile.Manifest.ID, manifestFile.Manifest.Kind, len(manifestFile.Manifest.Capabilities))
 	}
 	return nil
 }

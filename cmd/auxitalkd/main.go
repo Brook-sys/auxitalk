@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/Brook-sys/auxitalk/internal/config"
+	"github.com/Brook-sys/auxitalk/internal/logger"
 	"github.com/Brook-sys/auxitalk/internal/runtime"
 )
 
@@ -21,6 +22,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "auxitalkd: %v\n", err)
 		os.Exit(1)
 	}
+
+	if err := logger.Init(cfg.Runtime.LogPath); err != nil {
+		fmt.Fprintf(os.Stderr, "auxitalkd logger: %v\n", err)
+		os.Exit(1)
+	}
+	defer logger.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -52,6 +52,7 @@ type Runtime struct {
 	HealthTimeout      Duration `json:"healthTimeout"`
 	MaxPayloadSize     int64    `json:"maxPayloadSize"`
 	MaxEventsPerSecond int      `json:"maxEventsPerSecond"`
+	LogPath            string   `json:"logPath,omitempty"`
 }
 
 type Storage struct {
