@@ -32,6 +32,15 @@
       }
     },
     {
+      "manifest": "../plugin-telegram/plugin.json",
+      "enabled": false,
+      "env": {
+        "TELEGRAM_BOT_TOKEN": "${TELEGRAM_BOT_TOKEN}",
+        "TELEGRAM_API_BASE_URL": "https://api.telegram.org",
+        "TELEGRAM_POLL_INTERVAL": "2s"
+      }
+    },
+    {
       "manifest": "../plugin-stt/plugin.json",
       "enabled": false,
       "env": {
