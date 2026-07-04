@@ -95,6 +95,17 @@ func Default() Config {
 	}
 }
 
+func (c *Config) Save(path string) error {
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
+}
+
 func Load(path string) (Config, error) {
 	if strings.TrimSpace(path) == "" {
 		cfg := Default()

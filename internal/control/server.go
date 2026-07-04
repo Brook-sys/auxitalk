@@ -27,6 +27,7 @@ type Runtime interface {
 	EnableWorkflow(id string) error
 	DisableWorkflow(id string) error
 	EmitEvent(ctx context.Context, event types.Event) error
+	ConfigurePlugin(id string, enabled bool, env map[string]string) error
 }
 
 type Server struct {
@@ -43,6 +44,7 @@ func New(addr string, runtime Runtime) *Server {
 	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/api/status", s.status)
 	mux.HandleFunc("/api/plugins", s.plugins)
+	mux.HandleFunc("/api/plugins/configure", s.configurePlugin)
 	mux.HandleFunc("/api/events", s.eventsRoute)
 	mux.HandleFunc("/api/events/stream", s.eventsStream)
 	mux.HandleFunc("/api/actions", s.actions)
@@ -83,6 +85,27 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) plugins(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.runtime.PluginStatuses())
+}
+
+func (s *Server) configurePlugin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var payload struct {
+		ID      string            `json:"id"`
+		Enabled bool              `json:"enabled"`
+		Env     map[string]string `json:"env"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.runtime.ConfigurePlugin(payload.ID, payload.Enabled, payload.Env); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (s *Server) eventsRoute(w http.ResponseWriter, r *http.Request) {

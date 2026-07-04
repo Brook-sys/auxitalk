@@ -315,6 +315,55 @@ func (r *Runtime) PluginStatuses() []supervisor.ProcessStatus {
 	return r.supervisor.ListStatus()
 }
 
+func (r *Runtime) ConfigurePlugin(id string, enabled bool, env map[string]string) error {
+	changed := false
+	for i, p := range r.options.Config.Plugins {
+		manifestID := ""
+		if p.Inline != nil {
+			manifestID = p.Inline.ID
+		} else if p.Manifest != "" {
+			if m, err := plugins.LoadManifest(p.Manifest); err == nil {
+				manifestID = m.Manifest.ID
+			}
+		}
+		if manifestID == id {
+			r.options.Config.Plugins[i].Enabled = enabled
+			if r.options.Config.Plugins[i].Env == nil {
+				r.options.Config.Plugins[i].Env = make(map[string]string)
+			}
+			for k, v := range env {
+				r.options.Config.Plugins[i].Env[k] = v
+			}
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return fmt.Errorf("plugin %s not found in config", id)
+	}
+
+	// Persist if config path is known, but we don't store it in Options currently.
+	// We'll need a way to pass config path. But for now, we just apply dynamically.
+
+	if enabled {
+		if r.supervisor.IsRunning(id) {
+			_ = r.supervisor.Stop(id)
+			time.Sleep(100 * time.Millisecond)
+		}
+		// Try to start it. But we need the spec. loadPlugins does it.
+		// Instead of rewriting start logic, let's just re-run loadPlugins? No, it could start multiple.
+		// We can just stop it, and wait for reload or restart via control.
+		// Wait, supervisor Start requires the Spec which is only registered in loadPlugins.
+		// If it's already registered, we can just Start it.
+		if err := r.supervisor.Start(context.Background(), id); err != nil {
+			logger.Printf("configure start error: %v", err)
+		}
+	} else {
+		_ = r.supervisor.Stop(id)
+	}
+	return nil
+}
+
 func (r *Runtime) ConfiguredPlugins() []map[string]any {
 	items := make([]map[string]any, 0, len(r.options.Config.Plugins))
 	for _, plugin := range r.options.Config.Plugins {

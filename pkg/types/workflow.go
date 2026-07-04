@@ -107,7 +107,7 @@ func (r WorkflowRule) GetActions() []WorkflowAction {
 	return nil
 }
 
-func (r WorkflowRule) Matches(event Event) bool {
+func (r WorkflowRule) Matches(event Event, session Session) bool {
 	if !r.Enabled {
 		return false
 	}
@@ -118,17 +118,26 @@ func (r WorkflowRule) Matches(event Event) bool {
 		return false
 	}
 	for _, cond := range r.Trigger.Conditions {
-		if !cond.Matches(event) {
+		if !cond.Matches(event, session) {
 			return false
 		}
 	}
 	return true
 }
 
-func (c WorkflowCondition) Matches(event Event) bool {
+func (c WorkflowCondition) Matches(event Event, session Session) bool {
 	var actual string
-	if c.Field == "sessionId" {
+	if c.Field == "sessionId" || c.Field == "session.id" {
 		actual = event.SessionID
+	} else if c.Field == "session.channel" {
+		actual = session.Channel
+	} else if c.Field == "session.state" {
+		actual = session.State
+	} else if strings.HasPrefix(c.Field, "session.metadata.") {
+		key := strings.TrimPrefix(c.Field, "session.metadata.")
+		if val, ok := session.Metadata[key]; ok {
+			actual = fmt.Sprint(val)
+		}
 	} else if strings.HasPrefix(c.Field, "payload.") {
 		key := strings.TrimPrefix(c.Field, "payload.")
 		if val, ok := event.Payload[key]; ok {

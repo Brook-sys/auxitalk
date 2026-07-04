@@ -113,6 +113,96 @@
           ]
         }
       ]
+    },
+    {
+      "id": "telegram-audio-to-ai",
+      "name": "Telegram Audio to AI",
+      "enabled": true,
+      "rules": [
+        {
+          "id": "transcribe-audio",
+          "enabled": true,
+          "trigger": {
+            "eventType": "audio.received",
+            "source": "telegram"
+          },
+          "actions": [
+            {
+              "type": "stt.stt.transcribe",
+              "risk": "low",
+              "payload": {
+                "audio_url": "{{payload.audio_url}}",
+                "language": "pt"
+              }
+            }
+          ]
+        },
+        {
+          "id": "ask-ai-from-audio",
+          "enabled": true,
+          "trigger": {
+            "eventType": "action.executed",
+            "source": "core.runtime",
+            "conditions": [
+              {
+                "field": "payload.actionType",
+                "operator": "==",
+                "value": "stt.stt.transcribe"
+              },
+              {
+                "field": "payload.status",
+                "operator": "==",
+                "value": "completed"
+              }
+            ]
+          },
+          "actions": [
+            {
+              "type": "openai.ai.complete",
+              "risk": "medium",
+              "payload": {
+                "prompt": "{{payload.result.text}}",
+                "system": "You are a friendly AI assistant responding on Telegram. Reply concisely and kindly based on the audio transcription."
+              }
+            }
+          ]
+        },
+        {
+          "id": "reply-telegram",
+          "enabled": true,
+          "trigger": {
+            "eventType": "action.executed",
+            "source": "core.runtime",
+            "conditions": [
+              {
+                "field": "payload.actionType",
+                "operator": "==",
+                "value": "openai.ai.complete"
+              },
+              {
+                "field": "payload.status",
+                "operator": "==",
+                "value": "completed"
+              },
+              {
+                "field": "session.channel",
+                "operator": "==",
+                "value": "telegram"
+              }
+            ]
+          },
+          "actions": [
+            {
+              "type": "telegram.message.send",
+              "risk": "low",
+              "payload": {
+                "chatId": "{{event.sessionId}}",
+                "text": "{{payload.result.text}}"
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

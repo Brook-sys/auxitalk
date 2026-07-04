@@ -12,10 +12,10 @@ func TestWorkflowRuleValidateAndMatches(t *testing.T) {
 	if err := rule.Validate(); err != nil {
 		t.Fatalf("expected valid rule: %v", err)
 	}
-	if !rule.Matches(Event{Type: "message.received", Source: "whatsapp"}) {
+	if !rule.Matches(Event{Type: "message.received", Source: "whatsapp"}, Session{}) {
 		t.Fatal("expected rule to match")
 	}
-	if rule.Matches(Event{Type: "message.received", Source: "telegram"}) {
+	if rule.Matches(Event{Type: "message.received", Source: "telegram"}, Session{}) {
 		t.Fatal("expected source mismatch")
 	}
 
@@ -48,7 +48,7 @@ func TestWorkflowConditionMatches(t *testing.T) {
 		{WorkflowCondition{Field: "payload.text", Operator: "==", Value: "wrong"}, false},
 	}
 	for _, tc := range tests {
-		if got := tc.cond.Matches(event); got != tc.match {
+		if got := tc.cond.Matches(event, Session{}); got != tc.match {
 			t.Errorf("cond %+v: expected %v, got %v", tc.cond, tc.match, got)
 		}
 	}

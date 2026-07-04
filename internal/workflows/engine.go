@@ -89,15 +89,23 @@ func (e *Engine) HandleEvent(ctx context.Context, event types.Event) ([]types.Ac
 		return nil, err
 	}
 
+	var session types.Session
 	e.mu.RLock()
+	resolver := e.sessions
 	rules := make([]types.WorkflowRule, len(e.rules))
 	copy(rules, e.rules)
 	e.mu.RUnlock()
 
+	if resolver != nil && event.SessionID != "" {
+		if s, err := resolver.Get(event.SessionID); err == nil {
+			session = s
+		}
+	}
+
 	requested := []types.ActionRequest{}
 	fmt.Printf("[workflow] handle event type=%s source=%s rules=%d\n", event.Type, event.Source, len(rules))
 	for _, rule := range rules {
-		if !rule.Matches(event) {
+		if !rule.Matches(event, session) {
 			continue
 		}
 		for _, reqAction := range e.newActions(rule, event) {
